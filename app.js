@@ -13,55 +13,22 @@ const { uploadFile, getFileStream, deleteFile } = require('./s3.js')
 const data = fs.readFileSync('./database.json')
 const conf = JSON.parse(data)
 const path = require('path')
-
-// const bodyparser = require('body-parser')
-// app.use(bodyparser.json())
-// app.use(bodyparser.urlencoded({ extended: false }))
-
-const isAuthenticated = (req, res, next) => {
-    if (req.isAuthenticated()) {
-        next();
-    } else {
-        res.status()
-    }
-}
-app.set("view engine", "ejs");
-
-// "ejs"로 변경 후 "html" 파일로 열 수 있게 렌더링
-//app.engine("html", require("ejs").renderFile);
-
-const PORT = 3000 || process.env.PORT
-
-
-app.use(cookieParser());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json())
-
-const Dirpath = path.join(__filename, "../")
-app.use(express.static(Dirpath))
-app.set('view engine', 'ejs');
-//app.engine('html', require('ejs').renderFile);
-
 const aws = require('aws-sdk');
 const { CloudFront } = require('aws-sdk');
 const { networkInterfaces } = require('os');
 const s3 = new aws.S3()
 
 
+app.set("view engine", "ejs");
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json())
+const Dirpath = path.join(__filename, "../")
+app.use(express.static(Dirpath))
 
-const upload = multer({
-    dest: "logo"
-});
+const PORT = 3000 || process.env.PORT
 
-
-const db = mysql.createConnection({
-    host: conf.host,
-    user: conf.user,
-    password: conf.password,
-    database: conf.database
-})
-
-
+//사용자 로그인 여부 미들웨어
 const auth = function(req, res, next) {
     if (!req.session.user)
         res.send("<script>alert('로그인 후 이용가능합니다');window.location.href='/login';</script>")
@@ -69,6 +36,7 @@ const auth = function(req, res, next) {
         next();
 }
 
+//사용자 권한 판단 미들웨어
 const authAdmin = function(req, res, next) {
     if (req.session.user.authority <= 3)
         res.send(`res.send("<script>alert('접근 권한이 없습니다');window.location.href="javascript:window.history.back();";</script>")`);
@@ -76,14 +44,20 @@ const authAdmin = function(req, res, next) {
         next();
 }
 
-db.connect((err) => {
-    if (err)
-        throw err;
-    console.log("connected")
+//이미지 파일 저장 multer 미들웨어
+const upload = multer({
+    dest: "logo"
+});
+
+//mysql 연결 정보
+const db = mysql.createConnection({
+    host: conf.host,
+    user: conf.user,
+    password: conf.password,
+    database: conf.database
 })
 
-//var sessionStore = new MySQLStore(db);
-
+//유저 로그인 세션 정보 저장용
 app.use(
     session({
         secret: 'keyboard cat',
@@ -92,72 +66,23 @@ app.use(
     })
 )
 
-// app.get('', (req, res) => {
-//     let sql = "SELECT * FROM CLUBLIST"
-//     db.query(sql, (err, result) => {
-//         res.render("index.ejs", {
-//             result: JSON.parse(JSON.stringify(result)),
-//             bucket: process.env.AWS_BUCKET_NAME,
-//             region: process.env.AWS_BUCKET_REGION
 
-//         })
-//     })
-// })
+//db에 연결
+db.connect((err) => {
+    if (err)
+        throw err;
+    console.log("connected")
+})
 
+//인덱스 페이지
 app.get('', (req, res) => {
-    if (req.session.user)
+    if (req.session.user) //로그인 여부에 따라 페이지 로드
         res.redirect("/getOne")
     else
         res.redirect("/login")
 })
 
-
-app.get('/changePWD', auth, (req, res) => {
-    res.render('changePWD.ejs', {
-        pwd: req.session.user.admin_pw
-    });
-})
-
-app.post('/changePWD', (req, res) => {
-    const pwd = req.body.pwd1
-    bcrypt.genSalt(10, function(err, salt) {
-        if (err)
-            res.send("<script>alert('에러발생1');window.location.href='/changePWD';</script>")
-        bcrypt.hash(pwd, salt, function(err, hashedPWD) {
-            if (err) {
-                res.send("<script>alert('에러발생2');window.location.href='/changePWD';</script>")
-            }
-            let sql = `update CLUB_OLD set admin_pw = "${hashedPWD}" WHERE cid = ${req.session.user.cid}`
-            db.query(sql, async(err, result) => {
-                if (err)
-                    req.session.user = undefined
-                res.send("<script>alert(`성공적으로 변경되었습니다.\n다시 로그인 해주세요`);window.location.href='/login';</script>")
-            })
-        })
-    })
-})
-
-async function copy() {
-    let sql = "SELECT * FROM POST"
-    return db.query(sql, (err, result) => {
-        skkclub = JSON.stringify(result)
-        console.log(skkclub + "최고")
-    })
-}
-
-app.get('/create', upload.single('logo'), (req, res) => {
-    res.render('create.ejs')
-})
-
-app.get('/login', (req, res) => {
-    res.render('login.ejs');
-})
-
-app.get('/logout', (req, res) => {
-    req.session.user = undefined;
-    res.send("<script>alert(`로그아웃되었습니다.\n다시 로그인 해주세요`);window.location.href='/login';</script>")
-})
-
+//로그인 로직
 const login = async function(id, pw) {
     let result2 = "";
     let sql =
@@ -178,24 +103,25 @@ const login = async function(id, pw) {
     })
 }
 
+//로그인 페이지 (get)
+app.get('/login', (req, res) => {
+    res.render('login.ejs');
+})
+
+//로그인 페이지 (post)
 app.post('/login', async(req, res) => {
     var id = req.body.id;
     var pw = req.body.pwd;
     const result = await login(id, pw);
-    if (result.cid) {
+    if (result.cid) { //해당 id/pw로 이루어진 계정 존재 시
         req.session.user = result
         res.cookie('cnt', 0)
-        if (result.authority <= 3) {
+        if (result.authority <= 3) { //권한에 따라 페이지 로드 
             res.redirect("/getOne")
-                // res.redirect(url.format({
-                //     pathname: "/getOne",
-                //     query: result
-                // }))
         } else {
             res.redirect('/getAll')
         }
-        //res.redirect('/getAll')
-    } else {
+    } else { //로그인 횟수 저장 (TBD)
         if (!req.cookies.cnt) {
             res.cookie('cnt', 1);
         } else {
@@ -205,32 +131,35 @@ app.post('/login', async(req, res) => {
     }
 })
 
+
+//로그아웃 페이지 (get)
+app.get('/logout', (req, res) => {
+    req.session.user = undefined;
+    res.send("<script>alert(`로그아웃되었습니다.\n다시 로그인 해주세요`);window.location.href='/login';</script>")
+})
+
+
+//일반사용자 조회 페이지
 app.get('/getOne', auth, (req, res) => {
     let sql = `select * from CLUB_OLD WHERE cid = ${req.session.user.cid}`
     db.query(sql, async(err, result) => {
         if (err)
             console.log(err);
         req.session.user = result[0]
-        res.render('data.ejs', {
+        res.render('myInfo.ejs', {
             data: JSON.parse(JSON.stringify(result[0]))
         })
     })
 })
 
+//회원정보 수정 페이지 (본인)
 app.get('/updateData', auth, (req, res) => {
-    res.render('data2.ejs', {
-            data: JSON.parse(JSON.stringify(req.session.user))
-        })
-        // let sql = `select * from CLUB_OLD WHERE cid = ${req.session.user.cid}`
-        // db.query(sql, async(err, result) => {
-        //     if (err)
-        //         console.log(err);
-        //     res.render('data2.ejs', {
-        //         data: JSON.parse(JSON.stringify(result[0]))
-        //     })
-        // })
+    res.render('update.ejs', {
+        data: JSON.parse(JSON.stringify(req.session.user))
+    })
 })
 
+//회원정보 수정 페이지 (post)
 app.post('/updateData', (req, res) => {
     const data = req.body
     let sql = `update CLUB_OLD SET cname = "${data.cname}", category1= "${data.category1}", category2 = "${data.category2}", category3 = "${data.category3}", campus = "${data.campus}", estab_year = "${data.estab_year}",intro_text = "${data.intro_text}", intro_sentence = "${data.intro_sentence}", activity_info = "${data.activity_info}", meeting_time = "${data.meeting_time}", activity_location = "${data.activity_location}", activity_num = "${data.acticity_num}", recruit_season = "${data.recruit_season}", activity_period = "${data.activity_period}", recruit_process = "${data.recruit_process}", recruit_num = "${data.recruit_num}", recruit_site = "${data.recruit_site}", president_name = "${data.president_name}", president_contact = "${data.president_contact}", emergency_contact = "${data.emergency_contact}", website_link = "${data.website_link}", website_link2 = "${data.website_link2}"  WHERE cid = ${data.cid} `
@@ -241,62 +170,6 @@ app.post('/updateData', (req, res) => {
     })
 })
 
-
-app.get('/getAll', auth, authAdmin, (req, res) => {
-    res.render('dataTable.ejs')
-})
-
-app.post('/add', upload.single("logo"), async(req, res) => {
-    let sql =
-        `INSERT INTO POST (name, category, campus, author, logo ) VALUES ("${req.body.name}", "${req.body.category}", "${req.body.campus}", "${req.body.author}", "${req.file.originalname}")`
-    const result2 = await uploadFile(req.file)
-    db.query(sql, async(err, result) => {
-        if (err)
-            throw err;
-        res.redirect('/')
-    })
-})
-
-
-app.get('/update', async(req, res) => {
-    /*const club = skkclub.forEach(each=>{
-        return each.id == req.query.id
-    })*/
-    res.render("update.ejs", {
-
-    })
-})
-
-app.get('/another', (req, res) => {
-    let sql = "INSERT INTO CLUBLIST (campus, korName, engName, cnName, DIV1, DIV2, DIV3,logo,est,representative,repContact,emerCont, website1, website2,blocked, blockEU,auth) VALUES ('명륜','중앙동아리','','','중앙동아리','평면예술','서예', 'https://admin.skklub.com/img/logo/69.jpg','1963','조윤서','	01075596189','','https://www.instagram.com/skku.seodo','',1,'', 3)"
-    db.query(sql, async(err, result) => {
-        if (err)
-            throw err;
-        res.send('good')
-    })
-})
-
-app.get('/getOld', (req, res) => {
-    let sql = "SELECT a.* ,b.share ,b.upt FROM CLUB_OLD AS a INNER JOIN SHARE AS b ON a.cid = b.cid"
-    db.query(sql, async(err, data) => {
-        if (err)
-            throw err;
-        res.send((JSON.stringify(data)))
-    })
-})
-
-
-app.post('/update', upload.single("logo"), async(req, res) => {
-    id = Number(req.body.id)
-    let sql =
-        `UPDATE POST SET name = "${req.body.name}", category = "${req.body.category}", campus = "${req.body.campus}", author = "${req.body.author}", logo = "${req.file.originalname}" WHERE ID = ${id}`
-    const result = await uploadFile(req.file)
-    db.query(sql, (err, result) => {
-        if (err)
-            throw err;
-        res.redirect('/')
-    })
-})
 
 app.post('/updated', (req, res) => {
     if (req.body.updatedData !== undefined) {
@@ -341,21 +214,94 @@ app.post('/updated', (req, res) => {
     }
 })
 
-app.get('/delete', async(req, res) => {
-    id = req.query.id
-    let sql =
-        `DELETE FROM POST WHERE ID = ${id}`
-    try {
-        //const result = await deleteFile('KakaoTalk_20210807_184414709.png')
-        db.query(sql, (err, result) => {
-            if (err)
-                throw err;
-            res.redirect('/')
+//관리자 용 동아리 조회 페이지 
+app.get('/getAll', auth, authAdmin, (req, res) => {
+    res.render('master.ejs')
+})
+
+//관리자 용 동아리 조회 페이지 - ajax 요청 처리 로직
+app.get('/getData', (req, res) => {
+    let sql = "SELECT a.* ,b.share ,b.upt FROM CLUB_OLD AS a INNER JOIN SHARE AS b ON a.cid = b.cid"
+    db.query(sql, async(err, data) => {
+        if (err)
+            throw err;
+        res.send((JSON.stringify(data)))
+    })
+})
+
+//관리자 조회 페이지 => 동아리 권한 설정 기능
+app.post('/updated', (req, res) => {
+    if (req.body.updatedData !== undefined) {
+        req.body.updatedData.forEach((e) => {
+            let sql =
+                `UPDATE SHARE SET upt = 1 WHERE CID = "${Number(e)}"`
+            db.query(sql, async(err, result) => {
+                if (err)
+                    throw err;
+            })
         })
-    } catch (error) {
-        console.log(error)
+    }
+    if (req.body.sharedData !== undefined) {
+        req.body.sharedData.forEach((e) => {
+            let sql =
+                `UPDATE SHARE SET share = 1 WHERE CID = "${Number(e)}"`
+            db.query(sql, async(err, result) => {
+                if (err)
+                    throw err;
+            })
+        })
+    }
+    if (req.body.unupdatedData !== undefined) {
+        req.body.unupdatedData.forEach((e) => {
+            let sql =
+                `UPDATE SHARE SET upt = 0 WHERE CID = "${Number(e)}"`
+            db.query(sql, async(err, result) => {
+                if (err)
+                    throw err;
+            })
+        })
+    }
+    if (req.body.unsharedData !== undefined) {
+        req.body.unsharedData.forEach((e) => {
+            let sql =
+                `UPDATE SHARE SET share = 0 WHERE CID = "${Number(e)}"`
+            db.query(sql, async(err, result) => {
+                if (err)
+                    throw err;
+            })
+        })
     }
 })
+
+
+//비밀번호 변경 페이지 (get)
+app.get('/changePWD', auth, (req, res) => {
+    res.render('changePWD.ejs', {
+        pwd: req.session.user.admin_pw
+    });
+})
+
+//비밀번호 변경 페이지 (post)
+app.post('/changePWD', (req, res) => {
+    const pwd = req.body.pwd1
+    bcrypt.genSalt(10, function(err, salt) {
+        if (err)
+            res.send("<script>alert('에러발생');window.location.href='/changePWD';</script>")
+        bcrypt.hash(pwd, salt, function(err, hashedPWD) {
+            if (err) {
+                res.send("<script>alert('에러발생');window.location.href='/changePWD';</script>")
+            }
+            let sql = `update CLUB_OLD set admin_pw = "${hashedPWD}" WHERE cid = ${req.session.user.cid}`
+            db.query(sql, async(err, result) => {
+                if (err)
+                    res.send("<script>alert('에러발생');window.location.href='/changePWD';</script>")
+                req.session.user = undefined
+                res.send("<script>alert(`성공적으로 변경되었습니다.\n다시 로그인 해주세요`);window.location.href='/login';</script>")
+            })
+        })
+    })
+})
+
 
 app.listen(3000, () => {
     console.log("server is on " + PORT)

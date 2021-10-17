@@ -1,29 +1,26 @@
-//const bcrypt = require('bcrypt');
+//1차 비번 유효성 검사
+function validatePWD1(pwd1, pwd2) {
 
-/*
-const validatePWD1 = async function() {
-    console.log("zzz")
-    const val1 = document.getElementById('pwd1').value;
-    const pwd = '<%- pwd %>'
-    const isMatch = await bcrypt.compare(pwd, val1);
-    if (isMatch) {
-        alert("이전과 비번이 같음 ")
-        btn.disabled = false
+    if (pwd1.value.length < 6) { //6자리 미만
+        document.getElementById("wrongPWD").style.display = "inline-block";
+        document.getElementById("wrongPWD3").style.display = "none";
     } else {
-        btn.disabled = true
+        document.getElementById("wrongPWD").style.display = "none";
+        document.getElementById("wrongPWD3").style.display = "inline-block";
     }
+    if (pwd2.value.length != 0)
+        validatePWD2()
+}
 
-}*/
+//2차 비번 유효성 검사
+function validatePWD2(pwd1, pwd2) {
 
-function validatePWD2() {
-    const val1 = document.getElementById('pwd1').value;
-    const val2 = document.getElementById('pwd2').value;
     const btn = document.getElementById('submit')
-    if (val1 == val2) {
+    if (pwd1.value == pwd2.value) { //1차 == 2차비번일 경우 버튼 활성화
         document.getElementById("wrongPWD2").style.display = "none";
         if (document.getElementById("wrongPWD").style.display == "none")
             btn.disabled = false
-    } else {
+    } else { //1차 != 2차일 경우 버튼 비활
         document.getElementById("wrongPWD2").style.display = "inline-block";
         btn.disabled = true
     }

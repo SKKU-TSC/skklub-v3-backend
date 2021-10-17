@@ -17,32 +17,19 @@
             <form method="post" action="/changePWD">
                 <p>새로운 비밀번호 입력</p>
                 <div>
-                    <input type="password" id="pwd1" name="pwd1">
+                    <input type="password" id="pwd1" onkeyup="validatePWD1(document.getElementById('pwd1'), document.getElementById('pwd2'))" name="pwd1">
                     <span id="wrongPWD" style="display: none;">비밀번호의 형식이 잘못되었습니다</span>
                     <span id="wrongPWD3" style="display: none;">올바른 비밀번호 입니다.</span>
                 </div>
                 <p>비밀번호 재입력</p>
                 <div>
-                    <input type="password" id="pwd2" name="pwd2" onkeyup="validatePWD2()" name="pwd1">
+                    <input type="password" id="pwd2" name="pwd2" onkeyup="validatePWD2(document.getElementById('pwd1'), document.getElementById('pwd2'))" name="pwd1">
                     <span id="wrongPWD2" style="display: none;">비밀번호가 다릅니다</span>
                 </div>
                 <input type="submit" id="submit" name="submit" style="margin-top:10px" disabled>
             </form>
         </div>
         <script>
-            const pwd1 = document.getElementById("pwd1")
-            const pwd2 = document.getElementById("pwd2")
-            pwd1.onkeyup = function() {
-                if (pwd1.value.length < 6) {
-                    document.getElementById("wrongPWD").style.display = "inline-block";
-                    document.getElementById("wrongPWD3").style.display = "none";
-                } else {
-                    document.getElementById("wrongPWD").style.display = "none";
-                    document.getElementById("wrongPWD3").style.display = "inline-block";
-                }
-                if (pwd2.value.length != 0)
-                    validatePWD2()
-            }
         </script>
 </body>
 
